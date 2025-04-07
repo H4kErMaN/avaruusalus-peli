@@ -1,0 +1,312 @@
+import pygame
+import random
+
+pygame.init()
+
+# Näytön asetukset
+screen_width = 1280
+screen_height = 700
+screen = pygame.display.set_mode((screen_width, screen_height))
+pygame.display.set_caption("Space Shooter")
+
+# Värit
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+YELLOW = (255, 255, 0)
+GREEN = (0, 255, 0)
+RED = (255, 0, 0)
+
+# Fontit
+font = pygame.font.Font(None, 74)
+score_font = pygame.font.Font(None, 36)
+hp_font = pygame.font.Font(None, 30)
+
+# Äänenvoimakkuus
+volume = 0.5
+pygame.mixer.init()
+pygame.mixer.music.load("Brave Pilots (Menu Screen).ogg")  
+pygame.mixer.music.set_volume(volume)
+
+# Ladataan taustakuva aloitusnäyttöön
+mainmenu_bg = pygame.image.load("mainmenu.jpg")
+
+# Ladataan ampumisääni
+shoot_sound = pygame.mixer.Sound("shoot.wav")  # Varmista, että tiedosto on pelin kansiossa
+shoot_sound.set_volume(volume)
+
+# Aloitusnäyttö
+def show_start_screen():
+    global volume
+
+    while True:
+        screen.blit(mainmenu_bg, (0, 0))  
+
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+
+        start_text = font.render("Start Game", True, YELLOW if 250 < mouse_y < 300 else WHITE)
+        volume_text = font.render(f"Volume: {int(volume * 100)}%", True, YELLOW if 350 < mouse_y < 400 else WHITE)
+        quit_text = font.render("Quit", True, YELLOW if 450 < mouse_y < 500 else WHITE)
+
+        screen.blit(start_text, (screen_width // 2 - 150, 250))
+        screen.blit(volume_text, (screen_width // 2 - 150, 350))
+        screen.blit(quit_text, (screen_width // 2 - 150, 450))
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return "quit"
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if 250 < mouse_y < 300:
+                    pygame.mixer.music.play(-1)  
+                    return "start"
+                if 350 < mouse_y < 400:
+                    volume = (volume + 0.1) % 1.1  
+                    pygame.mixer.music.set_volume(volume)
+                    shoot_sound.set_volume(volume)  # Päivitetään myös ampumisäänen voimakkuus
+                if 450 < mouse_y < 500:
+                    pygame.quit()
+                    return "quit"
+
+# Pause-valikko
+def show_pause_menu():
+    while True:
+        screen.fill(BLACK)
+
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+
+        pause_text = font.render("PAUSED", True, WHITE)
+        resume_text = font.render("Resume", True, YELLOW if 250 < mouse_y < 300 else WHITE)
+        menu_text = font.render("Main Menu", True, YELLOW if 350 < mouse_y < 400 else WHITE)
+
+        screen.blit(pause_text, (screen_width // 2 - 100, 150))
+        screen.blit(resume_text, (screen_width // 2 - 100, 250))
+        screen.blit(menu_text, (screen_width // 2 - 100, 350))
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return "quit"
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if 250 < mouse_y < 300:
+                    return "resume"
+                if 350 < mouse_y < 400:
+                    return "start_screen"  # Palataan aloitusvalikkoon
+
+# Game Over-näyttö
+def show_game_over_screen():
+    global score
+    while True:
+        screen.fill(BLACK)
+
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+
+        game_over_text = font.render("GAME OVER", True, RED)
+        score_text = score_font.render(f"Score: {score}", True, WHITE)
+        restart_text = font.render("Restart", True, YELLOW if 250 < mouse_y < 300 else WHITE)
+        quit_text = font.render("Main Menu", True, YELLOW if 350 < mouse_y < 400 else WHITE)
+
+        screen.blit(game_over_text, (screen_width // 2 - 200, 150))
+        screen.blit(score_text, (screen_width // 2 - 100, 250))
+        screen.blit(restart_text, (screen_width // 2 - 100, 350))
+        screen.blit(quit_text, (screen_width // 2 - 100, 450))
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return "quit"
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if 250 < mouse_y < 300:
+                    return "restart"
+                if 350 < mouse_y < 400:
+                    return "start_screen"
+
+# Taustaelementit
+class Background:
+    def __init__(self):
+        self.stars = [pygame.Rect(random.randint(0, screen_width), random.randint(0, screen_height), random.randint(1, 3), random.randint(1, 3)) for _ in range(200)]
+        self.speed = 1
+
+    def update(self):
+        for star in self.stars:
+            star.x -= self.speed
+            if star.x < 0:
+                star.x = screen_width
+                star.y = random.randint(0, screen_height)
+
+    def draw(self):
+        for star in self.stars:
+            pygame.draw.rect(screen, WHITE, star)
+
+# Peliobjektit
+class Spaceship(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.image.load("alus.png").convert_alpha()
+        self.rect = self.image.get_rect()
+        self.rect.center = (100, screen_height // 2)
+        self.speed_y = 0
+
+    def update(self):
+        self.rect.y += self.speed_y
+        self.rect.top = max(0, self.rect.top)
+        self.rect.bottom = min(screen_height, self.rect.bottom)
+
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((10, 5))
+        self.image.fill(WHITE)
+        self.rect = self.image.get_rect(center=(x, y))
+        self.speed_x = 10
+
+    def update(self):
+        self.rect.x += self.speed_x
+        if self.rect.left > screen_width:
+            self.kill()
+
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, image, size, speed, score_value):
+        super().__init__()
+        self.image = pygame.image.load(image).convert_alpha()  # Ladataan viholliskuvan tiedosto
+        self.rect = self.image.get_rect(x=screen_width, y=random.randint(0, screen_height - size))
+        self.speed_x = speed
+        self.size = size
+        self.score_value = score_value
+
+    def update(self):
+        self.rect.x -= self.speed_x
+        if self.rect.right < 0:
+            self.kill()
+
+# Pelin alustus
+spaceship = Spaceship()
+background = Background()
+all_sprites = pygame.sprite.Group(spaceship)
+bullets = pygame.sprite.Group()
+enemies = pygame.sprite.Group()
+
+score = 0  # Pisteet
+player_lives = 3  # Pelaajan elämät
+enemy_images = ["örkki.png", "örkki2.png", "örkki3.png"]  # Esimerkki viholliskuvista
+enemy_sizes = [20, 5, 10]
+enemy_speeds = [5, 6, 7]
+enemy_scores = [10, 15, 20]
+
+# Pelin looppi
+def game_loop():
+    global score, player_lives
+    running = True
+    paused = False
+    clock = pygame.time.Clock()
+
+    # Lisätään vihollisia satunnaisesti
+    def spawn_enemy():
+     if random.random() < 0.02:  # Vihollisten spawn-osuus
+        enemy_idx = random.randint(0, 2)
+        enemy_size = enemy_sizes[enemy_idx]
+        spawn_margin = 50  # Etäisyys ylä- ja alareunasta
+        spawn_y = random.randint(spawn_margin, screen_height - enemy_size - spawn_margin)
+        enemy = Enemy(enemy_images[enemy_idx], enemy_size, enemy_speeds[enemy_idx], enemy_scores[enemy_idx])
+        enemy.rect.y = spawn_y
+        all_sprites.add(enemy)
+        enemies.add(enemy)
+
+
+    # Pelaajan elämän ja HP-palkin piirtäminen
+    def draw_hp():
+        hp_text = hp_font.render(f"Lives: {player_lives}", True, WHITE)
+        screen.blit(hp_text, (10, 40))
+        pygame.draw.rect(screen, RED, (10, 70, 200, 10))
+        pygame.draw.rect(screen, GREEN, (10, 70, 200 * (player_lives / 3), 10))
+
+    while running:
+        screen.fill(BLACK)
+        background.update()
+        background.draw()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_w:
+                    spaceship.speed_y = -5
+                elif event.key == pygame.K_s:
+                    spaceship.speed_y = 5
+                elif event.key == pygame.K_SPACE:
+                    bullet = Bullet(spaceship.rect.centerx, spaceship.rect.centery)
+                    all_sprites.add(bullet)
+                    bullets.add(bullet)
+                    shoot_sound.play()  # 🎵 Soitetaan ampumisäänen voimakkuus!
+                elif event.key == pygame.K_ESCAPE:
+                    paused = True
+            elif event.type == pygame.KEYUP:
+                if event.key in (pygame.K_w, pygame.K_s):
+                    spaceship.speed_y = 0
+
+        # Tarkistetaan osumat
+        for bullet in bullets:
+            hit_enemies = pygame.sprite.spritecollide(bullet, enemies, True)
+            for enemy in hit_enemies:
+                bullet.kill()
+                score += enemy.score_value  # Lisää pisteitä vihollisten tuhoamisesta
+
+        # Vihollisten läpimeno
+        for enemy in enemies:
+            if enemy.rect.right < spaceship.rect.left:  # Jos vihollinen menee ohi pelaajasta
+                player_lives -= 1
+                enemy.kill()
+                if player_lives <= 0:
+                    running = False  # Peli loppuu, jos kaikki elämät menevät
+
+        if paused:
+            result = show_pause_menu()
+            if result == "resume":
+                paused = False
+            elif result == "start_screen":
+                return "menu"
+            elif result == "quit":
+                running = False
+                break
+
+        all_sprites.update()
+        spawn_enemy()  # Spawnaa vihollisia
+
+        # Näytetään pistemäärä
+        score_text = score_font.render(f"Score: {score}", True, WHITE)
+        screen.blit(score_text, (10, 10))
+
+        # Piirretään pelaajan HP-palkki
+        draw_hp()
+
+        all_sprites.draw(screen)
+        pygame.display.flip()
+        clock.tick(60)
+
+    return "game_over"
+
+# Käynnistetään peli
+while True:
+    start_screen_result = show_start_screen()
+    if start_screen_result == "start":
+        game_result = game_loop()
+        if game_result == "game_over":
+            result = show_game_over_screen()
+            if result == "restart":
+                score = 0
+                player_lives = 3
+                all_sprites = pygame.sprite.Group(spaceship)
+                bullets = pygame.sprite.Group()
+                enemies = pygame.sprite.Group()
+                continue
+            elif result == "start_screen":
+                continue
+    elif start_screen_result == "quit":
+        break  
+
+pygame.quit()
