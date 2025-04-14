@@ -80,7 +80,7 @@ def show_pause_menu():
                 if 350 < mouse_y < 400:
                     return "start_screen"
 
-def show_game_over_screen():
+def show_game_over_screen(): #pelipäättyi ruutu
     global score
     while True:
         screen.fill(BLACK)
